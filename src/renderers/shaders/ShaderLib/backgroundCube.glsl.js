@@ -29,6 +29,7 @@ export const fragment = /* glsl */`
 
 uniform float flipEnvMap;
 uniform float backgroundBlurriness;
+uniform float backgroundIntensity;
 
 varying vec3 vWorldDirection;
 
@@ -50,10 +51,12 @@ void main() {
 
 	#endif
 
+	texColor.rgb *= backgroundIntensity;
+
 	gl_FragColor = texColor;
 
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 
 }
 `;
