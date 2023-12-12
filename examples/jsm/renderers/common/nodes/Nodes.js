@@ -1,7 +1,8 @@
 import DataMap from '../DataMap.js';
+import ChainMap from '../ChainMap.js';
 import NodeBuilderState from './NodeBuilderState.js';
 import { NoToneMapping, EquirectangularReflectionMapping, EquirectangularRefractionMapping } from 'three';
-import { NodeFrame, cubeTexture, texture, rangeFog, densityFog, reference, toneMapping, equirectUV, viewportBottomLeft, normalWorld } from '../../../nodes/Nodes.js';
+import { NodeFrame, objectGroup, renderGroup, frameGroup, cubeTexture, texture, rangeFog, densityFog, reference, toneMapping, equirectUV, viewportBottomLeft, normalWorld } from '../../../nodes/Nodes.js';
 
 class Nodes extends DataMap {
 
@@ -13,6 +14,74 @@ class Nodes extends DataMap {
 		this.backend = backend;
 		this.nodeFrame = new NodeFrame();
 		this.nodeBuilderCache = new Map();
+		this.callHashCache = new ChainMap();
+		this.groupsData = new ChainMap();
+
+	}
+
+	updateGroup( nodeUniformsGroup ) {
+
+		const groupNode = nodeUniformsGroup.groupNode;
+		const name = groupNode.name;
+
+		// objectGroup is every updated
+
+		if ( name === objectGroup.name ) return true;
+
+		// renderGroup is updated once per render/compute call
+
+		if ( name === renderGroup.name ) {
+
+			const uniformsGroupData = this.get( nodeUniformsGroup );
+			const renderId = this.nodeFrame.renderId;
+
+			if ( uniformsGroupData.renderId !== renderId ) {
+
+				uniformsGroupData.renderId = renderId;
+
+				return true;
+
+			}
+
+			return false;
+
+		}
+
+		// frameGroup is updated once per frame
+
+		if ( name === frameGroup.name ) {
+
+			const uniformsGroupData = this.get( nodeUniformsGroup );
+			const frameId = this.nodeFrame.frameId;
+
+			if ( uniformsGroupData.frameId !== frameId ) {
+
+				uniformsGroupData.frameId = frameId;
+
+				return true;
+
+			}
+
+			return false;
+
+		}
+
+		// other groups are updated just when groupNode.needsUpdate is true
+
+		const groupChain = [ groupNode, nodeUniformsGroup ];
+
+		let groupData = this.groupsData.get( groupChain );
+		if ( groupData === undefined ) this.groupsData.set( groupChain, groupData = {} );
+
+		if ( groupData.version !== groupNode.version ) {
+
+			groupData.version = groupNode.version;
+
+			return true;
+
+		}
+
+		return false;
 
 	}
 
@@ -145,18 +214,34 @@ class Nodes extends DataMap {
 
 	getCacheKey( scene, lightsNode ) {
 
-		const environmentNode = this.getEnvironmentNode( scene );
-		const fogNode = this.getFogNode( scene );
-		const toneMappingNode = this.getToneMappingNode();
+		const chain = [ scene, lightsNode ];
+		const callId = this.renderer.info.calls;
 
-		const cacheKey = [];
+		let cacheKeyData = this.callHashCache.get( chain );
 
-		if ( lightsNode ) cacheKey.push( 'lightsNode:' + lightsNode.getCacheKey() );
-		if ( environmentNode ) cacheKey.push( 'environmentNode:' + environmentNode.getCacheKey() );
-		if ( fogNode ) cacheKey.push( 'fogNode:' + fogNode.getCacheKey() );
-		if ( toneMappingNode ) cacheKey.push( 'toneMappingNode:' + toneMappingNode.getCacheKey() );
+		if ( cacheKeyData === undefined || cacheKeyData.callId !== callId ) {
 
-		return '{' + cacheKey.join( ',' ) + '}';
+			const environmentNode = this.getEnvironmentNode( scene );
+			const fogNode = this.getFogNode( scene );
+			const toneMappingNode = this.getToneMappingNode();
+
+			const cacheKey = [];
+
+			if ( lightsNode ) cacheKey.push( lightsNode.getCacheKey() );
+			if ( environmentNode ) cacheKey.push( environmentNode.getCacheKey() );
+			if ( fogNode ) cacheKey.push( fogNode.getCacheKey() );
+			if ( toneMappingNode ) cacheKey.push( toneMappingNode.getCacheKey() );
+
+			cacheKeyData = {
+				callId,
+				cacheKey: cacheKey.join( ',' )
+			};
+
+			this.callHashCache.set( chain, cacheKeyData );
+
+		}
+
+		return cacheKeyData.cacheKey;
 
 	}
 

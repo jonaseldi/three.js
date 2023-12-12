@@ -417,7 +417,7 @@ class WebGLNodeBuilder extends NodeBuilder {
 
 	}
 
-	getTexture( texture, textureProperty, uvSnippet ) {
+	generateTexture( texture, textureProperty, uvSnippet ) {
 
 		if ( texture.isTextureCube ) {
 
@@ -431,11 +431,41 @@ class WebGLNodeBuilder extends NodeBuilder {
 
 	}
 
-	getTextureBias( texture, textureProperty, uvSnippet, biasSnippet ) {
+	generateTextureLevel( texture, textureProperty, uvSnippet, biasSnippet ) {
 
 		if ( this.material.extensions !== undefined ) this.material.extensions.shaderTextureLOD = true;
 
 		return `textureLod( ${textureProperty}, ${uvSnippet}, ${biasSnippet} )`;
+
+	}
+
+	buildFunctionCode( shaderNode ) {
+
+		const layout = shaderNode.layout;
+		const flowData = this.flowShaderNode( shaderNode );
+
+		const parameters = [];
+
+		for ( const input of layout.inputs ) {
+
+			parameters.push( this.getType( input.type ) + ' ' + input.name );
+
+		}
+
+		//
+
+		const code = `${ this.getType( layout.type ) } ${ layout.name }( ${ parameters.join( ', ' ) } ) {
+
+	${ flowData.vars }
+
+${ flowData.code }
+	return ${ flowData.result };
+
+}`;
+
+		//
+
+		return code;
 
 	}
 

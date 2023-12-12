@@ -1,3 +1,5 @@
+import { IntType } from 'three';
+
 class WebGLAttributeUtils {
 
 	constructor( backend ) {
@@ -86,7 +88,9 @@ class WebGLAttributeUtils {
 		backend.set( attribute, {
 			bufferGPU,
 			type,
-			bytesPerElement: array.BYTES_PER_ELEMENT
+			bytesPerElement: array.BYTES_PER_ELEMENT,
+			version: attribute.version,
+			isInteger: type === gl.INT || type === gl.UNSIGNED_INT || attribute.gpuType === IntType
 		} );
 
 	}
@@ -100,9 +104,30 @@ class WebGLAttributeUtils {
 		const bufferAttribute = attribute.isInterleavedBufferAttribute ? attribute.data : attribute;
 		const bufferData = backend.get( bufferAttribute );
 		const bufferType = bufferData.bufferType;
+		const updateRanges = attribute.isInterleavedBufferAttribute ? attribute.data.updateRanges : attribute.updateRanges;
 
 		gl.bindBuffer( bufferType, bufferData.bufferGPU );
-		gl.bufferSubData( bufferType, 0, array );
+
+		if ( updateRanges.length === 0 ) {
+
+			// Not using update ranges
+
+			gl.bufferSubData( bufferType, 0, array );
+
+		} else {
+
+			for ( let i = 0, l = updateRanges.length; i < l; i ++ ) {
+
+				const range = updateRanges[ i ];
+				gl.bufferSubData( bufferType, range.start * array.BYTES_PER_ELEMENT,
+					array, range.start, range.count );
+
+			}
+
+			bufferAttribute.clearUpdateRanges();
+
+		}
+
 		gl.bindBuffer( bufferType, null );
 
 		bufferData.version = bufferAttribute.version;
